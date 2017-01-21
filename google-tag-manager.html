@@ -22,41 +22,85 @@ Example:
 -->
 
 <dom-module id="google-tag-manager">
-  <template>
+    <template>
     <noscript>
       <iframe src={{_computeSrc(cid)}} height="0" width="0" style="display:none;visibility:hidden"></iframe>
     </noscript>
   </template>
 
-  <script>
-    Polymer({
-      is: 'google-tag-manager',
+    <script>
+        Polymer({
+            is: 'google-tag-manager',
+            timeout: false,
+            properties: {
+                /**
+                 * `cid` is the container ID
+                 */
+                cid: {
+                    type: String,
+                }
+            },
 
-      properties: {
-        /**
-         * `cid` is the container ID
-         */
-        cid: {
-          type: String,
-        }
-      },
+            // Element Lifecycle
 
-      // Element Lifecycle
+            attached: function() {
+                (function(w, d, s, l, i) {
+                    w[l] = w[l] || [];
+                    w[l].push({
+                        'gtm.start': new Date().getTime(),
+                        event: 'gtm.js'
+                    });
+                    var f = d.getElementsByTagName(s)[0],
+                        j = d.createElement(s),
+                        dl = l != 'dataLayer' ? '&l=' + l : '';
+                    j.async = true;
+                    j.src =
+                        '//www.googletagmanager.com/gtm.js?id=' + i + dl;
+                    f.parentNode.insertBefore(j, f);
+                })(window, document, 'script', 'dataLayer', this.cid);
+            },
 
-      attached: function() {
-        (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-        new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-        '//www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-        })(window,document,'script','dataLayer',this.cid);
-      },
+            ready: function() {
+                //Set the track function to prevent any error from the tracking-component
+                window.track = function(){};
+                this.async(function() {
+                    this.interval = setInterval(this._checkGA.bind(this), 100);
+                }, 50);
+            },
 
+            _checkGA: function() {
+                if (typeof ga !== "function") {
+                    return;
+                }
+                clearInterval(this.interval);
+                this._initTrack.bind(this)();
+            },
 
-      // Element Behavior
+            _initTrack: function() {
+                function guid() {
+                    function s4() {
+                        return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+                    }
+                    return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+                        s4() + '-' + s4() + s4() + s4();
+                }
 
-      _computeSrc: function(cid) {
-        return '//www.googletagmanager.com/ns.html?id=' + cid;
-      }
-    });
-  </script>
+                window.track = function(category, event, sessionId, customerId, attributes) {
+                    var id = guid();
+                    var timestamp = new Date().getTime();
+                    var label = id + '|' + timestamp + '|' + sessionId + '|' + customerId;
+                    for (i = 0; i < attributes.length; i++) {
+                        label = label + '|' + attributes[i];
+                    }
+                    ga('send', 'event', category, event, label);
+                };
+            },
+
+            // Element Behavior
+
+            _computeSrc: function(cid) {
+                return '//www.googletagmanager.com/ns.html?id=' + cid;
+            }
+        });
+    </script>
 </dom-module>
