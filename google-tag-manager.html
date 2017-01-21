@@ -32,6 +32,8 @@ Example:
         Polymer({
             is: 'google-tag-manager',
             timeout: false,
+            isAnalyticsLoaded: false,
+            offlineEvents: [],
             properties: {
                 /**
                  * `cid` is the container ID
@@ -59,24 +61,26 @@ Example:
                     f.parentNode.insertBefore(j, f);
                 })(window, document, 'script', 'dataLayer', this.cid);
             },
-
-            ready: function() {
-                //Set the track function to prevent any error from the tracking-component
-                window.track = function(){};
-                this.async(function() {
-                    this.interval = setInterval(this._checkGA.bind(this), 100);
-                }, 50);
-            },
-
             _checkGA: function() {
                 if (typeof ga !== "function") {
                     return;
                 }
                 clearInterval(this.interval);
-                this._initTrack.bind(this)();
+                this.isAnalyticsLoaded = true;
+                this._processOfflineEvents.bind(this)();
             },
 
-            _initTrack: function() {
+            _processOfflineEvents: function() {
+                // is ga ok?
+                this.offlineEvents.map(function sendEvent(ev) {
+                    ga('send', 'event', ev.category, ev.event, ev.label);
+                });
+                //empty the array
+                this.offlineEvents.length = 0;
+            },
+
+            createLabel: function(category, event, sessionId, customerId, attributes) {
+
                 function guid() {
                     function s4() {
                         return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
@@ -85,15 +89,35 @@ Example:
                         s4() + '-' + s4() + s4() + s4();
                 }
 
-                window.track = function(category, event, sessionId, customerId, attributes) {
-                    var id = guid();
-                    var timestamp = new Date().getTime();
-                    var label = id + '|' + timestamp + '|' + sessionId + '|' + customerId;
-                    for (i = 0; i < attributes.length; i++) {
-                        label = label + '|' + attributes[i];
+                var id = guid();
+                var timestamp = new Date().getTime();
+                var label = id + '|' + timestamp + '|' + sessionId + '|' + customerId;
+                for (i = 0; i < attributes.length; i++) {
+                    label = label + '|' + attributes[i];
+                }
+                return label;
+            },
+
+            ready: function() {
+                window.track = function(category, eventName, sessionId, customerId, attributes) {
+
+                    var label = this.createLabel(category, eventName, sessionId, customerId, attributes);
+                    
+                    if (this.isAnalyticsLoaded) {
+                        ga('send', 'event', category, eventName, label);
+                        return;
                     }
-                    ga('send', 'event', category, event, label);
-                };
+                    this.offlineEvents.push({
+                        category: category,
+                        eventName: event,
+                        label: label,
+
+                    });
+                }.bind(this);
+
+                this.async(function() {
+                    this.interval = setInterval(this._checkGA.bind(this), 100);
+                }, 50);
             },
 
             // Element Behavior
